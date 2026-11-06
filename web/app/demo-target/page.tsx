@@ -5,7 +5,7 @@ import SyncBadge from "./SyncBadge";
 import { readDemoState } from "@/lib/demoState";
 
 export const metadata: Metadata = {
-  title: "Kopi Nusantara — checkout (staging)",
+  title: "Northwind Coffee Co. — checkout (staging)",
   description: "Deliverable under inspection: a checkout page that either ships its payment button or does not.",
 };
 
@@ -40,22 +40,22 @@ export default async function DemoTargetPage({ searchParams }: { searchParams: P
       <main className="mx-auto max-w-3xl px-6 py-12">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#d9a441] font-semibold text-[#2b1d05]">
-            K
+            N
           </div>
           <div>
-            <div className="text-sm font-semibold text-zinc-100">Kopi Nusantara</div>
+            <div className="text-sm font-semibold text-zinc-100">Northwind Coffee Co.</div>
             <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-500">staging · order checkout</div>
           </div>
         </div>
 
         <h1 className="mt-8 text-2xl font-semibold text-zinc-50">Your order</h1>
         <p className="mt-2 text-sm text-zinc-400">
-          Two bags of Gayo, one grinder. Delivered Thursday. This is the page the client is paying for.
+          Two bags of Yirgacheffe, one grinder. Delivered Thursday. This is the page the client is paying for.
         </p>
 
         <div className="mt-6 rounded-xl border border-zinc-800 bg-[#141720]">
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 text-sm">
-            <span className="text-zinc-300">Gayo Arabica · 2 × 250g</span>
+            <span className="text-zinc-300">Ethiopia Yirgacheffe · 2 × 250g</span>
             <span className="font-mono text-zinc-300">$34.00</span>
           </div>
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3 text-sm">
