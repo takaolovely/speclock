@@ -267,6 +267,7 @@ contracts/factory/    mint (keyless), record_receipt, list_invoices, summaries, 
 agents/verifier/      outbound-only Playwright agent: gate, inspect, canonical claim, attest
 web/                  Next.js: / landing, /app dashboard, /demo-target the delivery under test
 evidence/             claim.json + report.json + screenshot for the attested demo run
+docs/                 the architecture diagram (html source + rendered png)
 scripts/              e2e pass/fail/refund walkthroughs against testnet
 ```
 
