@@ -1,0 +1,1 @@
+{"checklist_hash":"6d7c30e5da435503912be1a8b48861d3e6bc9901e5df94a69ceaefb0d859d912","invoice_id":"inv-0062","overall":"pass","rules":[{"i":0,"p":true,"t":"http_status"},{"i":1,"p":true,"t":"console_errors"},{"i":2,"p":true,"t":"dom_selector"},{"i":3,"p":true,"t":"response_time_ms"}],"target_url":"https://speclock-nine.vercel.app/demo-target","v":1}

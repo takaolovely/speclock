@@ -38,7 +38,7 @@ function preset(name, url) {
       rules: [
         { type: "http_status", expected: 200 },
         { type: "console_errors", max: 2 },
-        { type: "text_contains", text: "RecallSpend" },
+        { type: "text_contains", text: "Kopi Nusantara" },
         { type: "response_time_ms", max: 20000 },
       ],
     };

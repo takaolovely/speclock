@@ -1,1 +1,0 @@
-{"version":1,"target_url":"https://recallspend.vercel.app","rules":[{"type":"http_status","expected":200},{"type":"console_errors","max":2},{"type":"text_contains","text":"RecallSpend"},{"type":"response_time_ms","max":20000}]}

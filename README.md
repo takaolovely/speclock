@@ -16,29 +16,11 @@ Each invoice is a **keyless NEAR sub-account**: an agent attests a deterministic
 
 ---
 
-## The flow, in one transaction chain
+## The flow, in five steps
 
-```
-client                      factory                    invoice account              verifier
-  │                            │                             │                        │
-  │ create_invoice(deposit) ──▶│                             │                        │
-  │                            │ create_account              │                        │
-  │                            │ transfer(deposit)           │                        │
-  │                            │ deploy_contract             │                        │
-  │                            │ call new() ────────────────▶│  Funded                │
-  │                            │        (no AddKey anywhere) │  no access keys        │
-  │                                                                                    │
-  │ request_inspection() ─────────────────────────────────────▶│  flag = true           │
-  │                            │                             │◀─── polls list_invoices()
-  │                            │                             │     reads checklist
-  │                            │                             │◀─── attest(hash, pass, rules)
-  │                            │◀── record_receipt ──────────│  Settling              │
-  │                            │    (split 10% + receipt)    │                        │
-  │                            │                             │  delete_account ───────▶ freelancer
-  │                            │                             │  (90% + storage stake) │
-```
+![SpecLock architecture](docs/architecture.png)
 
-A `fail` verdict moves nothing. The invoice stays `Funded`, the money stays locked, and the freelancer can fix the delivery and ask for another check.
+A `fail` verdict moves nothing. The invoice stays `Funded`, the money stays locked, and the freelancer can fix the delivery and ask for another check. After `deadline_ms` the client can `refund()` instead and the account deletes itself, sweeping everything back.
 
 ---
 
@@ -54,35 +36,43 @@ So the hash covers only what must be identical:
 
 ```json
 {
-  "v": 1,
-  "invoice_id": "inv-0056",
-  "target_url": "https://recallspend.vercel.app",
-  "checklist_hash": "…",
-  "overall": "fail",
+  "checklist_hash": "6d7c30e5da435503…b0d859d912",
+  "invoice_id": "inv-0062",
+  "overall": "pass",
   "rules": [
-    { "i": 0, "t": "http_status",      "p": true  },
-    { "i": 1, "t": "console_errors",   "p": true  },
-    { "i": 2, "t": "dom_selector",     "p": false },
-    { "i": 3, "t": "response_time_ms", "p": true  }
-  ]
+    { "i": 0, "p": true, "t": "http_status"      },
+    { "i": 1, "p": true, "t": "console_errors"   },
+    { "i": 2, "p": true, "t": "dom_selector"     },
+    { "i": 3, "p": true, "t": "response_time_ms" }
+  ],
+  "target_url": "https://speclock-nine.vercel.app/demo-target",
+  "v": 1
 }
 ```
 
 Timestamps, durations, console sampling and the screenshot path stay in `report.json` where a human can read them. They never enter the hash.
 
-Measured, two runs of the same page 19 seconds apart:
+Measured on `inv-0062`, two runs of the same page 48 seconds apart:
 
 ```
-run 1   5c6aced21db00c74…efd5bb1277ade30ccb3b40ebcb811   duration_ms 2018   nav 181ms
-run 2   5c6aced21db00c74…efd5bb1277ade30ccb3b40ebcb811   duration_ms 2032   nav 108ms
+run 1   1fadbb01adb687cb…d7e8e6bae7a814   duration_ms 2046   pass
+run 2   1fadbb01adb687cb…d7e8e6bae7a814   duration_ms 2096   pass
 ```
 
-Same claim, different clock. The contract already holds this hash for `inv-0056`, written at attest time days before those two re-runs:
+The same invoice failed two runs earlier, 16 seconds apart, and the fail claim was equally stable:
 
 ```
-inv-0056.speclock.testnet evidence() →
-  5c6aced21db00c74…efd5bb1277ade30ccb3b40ebcb811 | fail
-  {"r":[…{"t":"dom_selector","p":false}…]}
+run 1   e3c7dae91cbe319c…559c8f7f0484928   duration_ms 2111   fail (dom_selector: missing)
+run 2   e3c7dae91cbe319c…559c8f7f0484928   duration_ms 2074   fail (dom_selector: missing)
+```
+
+Same claim, different clock. The contract holds the pass hash, written at attest time:
+
+```
+inv-0062.speclock.testnet evidence() →  1fadbb01adb687cb…d7e8e6bae7a814 | pass
+speclock.testnet.get_summary("inv-0062")
+  → {"r":[{"t":"http_status","p":true},{"t":"console_errors","p":true},
+          {"t":"dom_selector","p":true},{"t":"response_time_ms","p":true}]}
 ```
 
 A third party re-running the check today lands on the identical 32 bytes. Canonicalisation is one function (`agents/verifier/lib/report.js`) that sorts keys and drops whitespace, used by the agent and by the contract's `checklist_hash`, so there is no second opinion to disagree with.
@@ -90,14 +80,13 @@ A third party re-running the check today lands on the identical 32 bytes. Canoni
 The proof is checkable without trusting the agent at all:
 
 ```bash
-# evidence for an attested invoice
-cat evidence/inv-mw4i95pv/claim.json
-sha256sum evidence/inv-mw4i95pv/claim.json
-# 89bc0ae2145c8d3f438bdb33c591587238942e9e37f0fe4e88dc72f49b86ec72
+# evidence for the attested invoice
+cat evidence/inv-0062/claim.json
+sha256sum evidence/inv-0062/claim.json
+# 1fadbb01adb687cb8efc60d14e719b077b25eff62b1b2d8d42d7e8e6bae7a814
 
 # the same value, as recorded by the contract:
-node -e '…' # or any NEAR view call:
-# speclock.testnet.get_summary("inv-mw4i95pv") / inv-mw4i95pv.speclock.testnet.evidence()
+# speclock.testnet.get_receipt("inv-0062") → 1fadbb01adb687cb…d7e8e6bae7a814 | pass
 ```
 
 `claim.json` is written without a trailing newline for exactly this reason: `sha256sum` on the file equals the on-chain hash, no preprocessing step.
@@ -108,19 +97,21 @@ node -e '…' # or any NEAR view call:
 
 The gate runs before a browser is opened (`agents/verifier/lib/security.js`), and it re-resolves DNS because a public name that resolves inward is the same attack wearing a hat.
 
-Actual output, all 10 cases:
+Actual output, all 9 cases:
 
 ```
-BLOCK http://recallspend.vercel.app              → protocol http: not allowed
-BLOCK https://localhost/x                        → internal hostnames are not allowed
-BLOCK https://127.0.0.1/x                        → IP literals are not allowed
-BLOCK https://169.254.169.254/latest/meta-data/  → IP literals are not allowed
-BLOCK https://10.0.0.5/x                         → IP literals are not allowed
-BLOCK https://evil.example.com/x                 → host not on the allowlist
-BLOCK https://user:pass@recallspend.vercel.app   → credentials in URL are not allowed
-BLOCK https://recallspend.vercel.app:8443/x      → port 8443 not allowed
-ALLOW https://recallspend.vercel.app/
+BLOCK http://staging.example.com/                 → protocol http: not allowed
+BLOCK https://localhost/x                         → internal hostnames are not allowed
+BLOCK https://127.0.0.1/x                         → IP literals are not allowed
+BLOCK https://169.254.169.254/latest/meta-data/   → IP literals are not allowed
+BLOCK https://10.0.0.5/x                          → IP literals are not allowed
+BLOCK https://evil.example.com/x                  → host evil.example.com is not on the allowlist
+BLOCK https://user:pass@staging.example.com/      → credentials in URL are not allowed
+BLOCK https://staging.example.com:8443/x          → port 8443 not allowed
+ALLOW https://speclock-nine.vercel.app/           → ok
 ```
+
+`127.0.0.1`, `10.0.0.5` and `169.254.169.254` are not this deployment's addresses. They are the reserved ranges every SSRF payload tries first: loopback, private RFC1918, and the cloud metadata endpoint. They are in the list because a gate that has never been shown rejecting them is a gate nobody can trust.
 
 Run it yourself:
 
@@ -158,8 +149,8 @@ Build sizes: invoice `162,888 B`, factory `336,842 B` (the invoice wasm is embed
 `agents/verifier` — a CLI, not a service with an API.
 
 ```
-node index.js --invoice inv-0056          # one invoice, dry run, no chain write
-node index.js --invoice inv-0056 --attest # one invoice, publish the verdict
+node index.js --invoice inv-0062          # one invoice, dry run, no chain write
+node index.js --invoice inv-0062 --attest # one invoice, publish the verdict
 node index.js --poll --interval 12        # the deployed mode
 ```
 
@@ -181,7 +172,7 @@ Next.js + Tailwind on Vercel, one page. Two traps this had to handle, both of wh
 **A settled invoice no longer exists.** `view_account` on `inv-…` returns `UNKNOWN_ACCOUNT`, which is the success case, not an error. `/api/invoices` catches it and falls back to the factory receipt:
 
 ```
-inv-mw4i95pv  SETTLED · SELF-DESTRUCTED   0.50 NEAR
+inv-0062      SETTLED · SELF-DESTRUCTED   0.50 NEAR
               Account deleted after payout — 100% of the storage stake returned to the freelancer.
               PASS http_status · PASS console_errors · PASS dom_selector · PASS response_time_ms
 ```
@@ -246,10 +237,9 @@ RPC note: `rpc.testnet.near.org` returns HTTP 429 under any real load. Everythin
 
 | what | transaction |
 |---|---|
-| mint `inv-mw4i95pv` (live app → chain) | [`3KwJYVLe…PpwS`](https://testnet.nearblocks.io/txns/3KwJYVLeDynQQshKVK9f17WLwkMDdJDPUT1FhMZyPpwS) |
-| `request_inspection` from the browser | [`F4hG317D…aNug`](https://testnet.nearblocks.io/txns/F4hG317DjERpP6LxTZtdgCzLBQU9ZiWBgnptm1oqaNug) |
-| attest + split + receipt + self-destruct | [`BMF1DWXd…gc6Q`](https://testnet.nearblocks.io/txns/BMF1DWXdvW4rX6Vfs8F1hUZW3cHe1wFxDQYEyqipgc6Q) |
-| fail path, money stays put | `inv-0056` — verdict `fail`, status stays `Funded` |
+| mint `inv-0062` (0.5 NEAR escrow, keyless) | [`615p1eBn…QPWS`](https://testnet.nearblocks.io/txns/615p1eBnSDSV6GuXNcKeJAPz6nwjAo8N8mAtGh8pQPWS) |
+| fail attest — money does not move | [`2UMr3eyy…q5NC`](https://testnet.nearblocks.io/txns/2UMr3eyyH7fhaB8s6pMhc4UUmtjSKwhykW8Y4n3Aq5NC) — status stays `Funded` |
+| pass attest + split + receipt + self-destruct | [`34PatvWw…MZn8`](https://testnet.nearblocks.io/txns/34PatvWwqzELFr7MUkGbgCcbV5FQQFJ6c778EWF5MZn8) |
 | refund path | `inv-0045` — `REFUNDED`, account deleted, client made whole |
 
 Attested case, end to end: `attest` → `RECEIPT_RECORDED` → `SETTLED|…|pass|amount=499999999999999991611392|split=49999999999999999161139` → account deleted, 90% + full storage stake swept to the freelancer, 10% to the split wallet.
