@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "SpecLock — invoices that unlock on proof",
   description: "Keyless NEAR invoice accounts that pay out when an agent attests a deterministic checklist.",
+  icons: { icon: "/logo.svg" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

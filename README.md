@@ -165,7 +165,7 @@ Evidence per invoice lands in `evidence/<invoice_id>/`: `checklist.json`, `repor
 
 ## Web app
 
-Next.js + Tailwind on Vercel, one page. Two traps this had to handle, both of which are real:
+Next.js + Tailwind on Vercel, three routes (/, /app, /demo-target). Two traps this had to handle, both of which are real:
 
 **The UI cannot read files off the VPS.** It has no port to talk to, and serverless has no disk of ours. That is why the per-rule result is written **on chain** at attest time (`rules_summary` → factory `summaries`) and read back by `/api/invoices`. The browser renders PASS/FAIL per rule for an account that has already been deleted.
 
@@ -240,7 +240,7 @@ RPC note: `rpc.testnet.near.org` returns HTTP 429 under any real load. Everythin
 | mint `inv-0062` (0.5 NEAR escrow, keyless) | [`615p1eBn…QPWS`](https://testnet.nearblocks.io/txns/615p1eBnSDSV6GuXNcKeJAPz6nwjAo8N8mAtGh8pQPWS) |
 | fail attest — money does not move | [`2UMr3eyy…q5NC`](https://testnet.nearblocks.io/txns/2UMr3eyyH7fhaB8s6pMhc4UUmtjSKwhykW8Y4n3Aq5NC) — status stays `Funded` |
 | pass attest + split + receipt + self-destruct | [`34PatvWw…MZn8`](https://testnet.nearblocks.io/txns/34PatvWwqzELFr7MUkGbgCcbV5FQQFJ6c778EWF5MZn8) |
-| refund path | `inv-0045` — `REFUNDED`, account deleted, client made whole |
+| refund path — deadline passed, client made whole | [`5npkCiNu…hkqL`](https://testnet.nearblocks.io/txns/5npkCiNuiy78d1dfaxMr6EZF3dEatCdmAYBiCq4shkqL) |
 
 Attested case, end to end: `attest` → `RECEIPT_RECORDED` → `SETTLED|…|pass|amount=499999999999999991611392|split=49999999999999999161139` → account deleted, 90% + full storage stake swept to the freelancer, 10% to the split wallet.
 

@@ -113,8 +113,10 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-5xl px-5 py-12">
       <nav className="mb-8 flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-        <a href="/" className="text-zinc-400 transition-colors hover:text-emerald-400">
-          ← SpecLock
+        <a href="/" className="flex items-center gap-2 text-zinc-400 transition-colors hover:text-emerald-400">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="" width={18} height={18} className="h-[18px] w-[18px]" />
+          SpecLock
         </a>
         <span className="text-zinc-700">/</span>
         <span>app</span>
@@ -149,7 +151,17 @@ export default function Home() {
 
       <section className="mt-10 grid gap-4 rounded-2xl border border-zinc-800 bg-[#141720] p-5 md:grid-cols-2">
         <label className="text-xs text-zinc-300">
-          Delivery URL (https)
+          <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <span>Delivery URL (https)</span>
+            <a
+              href="/demo-target"
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[10px] text-emerald-400/90 underline-offset-2 transition-colors hover:text-emerald-300 hover:underline"
+            >
+              Open /demo-target in a new tab ↗
+            </a>
+          </span>
           <input
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:border-emerald-500"
             value={targetUrl}
