@@ -186,7 +186,15 @@ inv-mw4i95pv  SETTLED · SELF-DESTRUCTED   0.50 NEAR
               PASS http_status · PASS console_errors · PASS dom_selector · PASS response_time_ms
 ```
 
-A red banner for a successful payout would be a worse bug than a missing row.
+**A red banner for a successful payout would be a worse bug than a missing row.**
+
+**Free RPC endpoints rate-limit, and a polling page is exactly the traffic shape that trips them.** This was found the honest way: the deployed page rendered `{"jsonrpc":"2.0","error":{"code":-429,…}}` where invoices should be. Three fixes, all visible in `lib/near.ts` and `app/api/invoices/route.ts`:
+
+- reads fail over across endpoints, and a `-429` returned *inside* an HTTP 200 body is classified as "this node is busy", not as "the chain says no" — otherwise failover never fires;
+- a 12 second server-side snapshot means ten open tabs cost one read, not ten;
+- if every endpoint refuses, the API serves the last confirmed snapshot with a `warning` flag instead of an error screen. A snapshot that is twelve seconds old is still true; a red box is not.
+
+A transient failure is also explicitly *not* treated as evidence that an account is gone — that would make a live invoice vanish from the page during a bad minute.
 
 **On the demo client key.** The UI mints with a testnet key held server-side so a judge does not have to install a wallet to try the product. It is testnet-only and holds pocket money. A real deployment would ask the client to sign with their own wallet; nothing in the contract changes if they do.
 

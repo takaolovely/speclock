@@ -1,5 +1,5 @@
 import { NextResponse, connection } from "next/server";
-import { FACTORY, RPC, view } from "@/lib/near";
+import { FACTORY, RPC, RpcError, view } from "@/lib/near";
 
 // Next 16 with cacheComponents: opt into per-request execution by awaiting
 // connection(). Route segment config ("dynamic") is rejected in this mode.
@@ -19,14 +19,16 @@ type Row = Record<string, unknown>;
 async function resolveInvoice(id: string): Promise<Row> {
   const account = `${id}.${FACTORY}`;
   try {
-    const [meta, status, evidence, checklistRaw, inspection] = await Promise.all([
+    // Three reads, not five: `meta` already carries the inspection flag and
+    // `evidence` already carries the per-rule summary. Public RPCs are rate
+    // limited, and every dropped call is a judge who sees a 429 instead of the
+    // product.
+    const [meta, status, evidence] = await Promise.all([
       view<string[]>(account, "meta"),
       view<string>(account, "status"),
       view<string[]>(account, "evidence"),
-      view<string>(account, "checklist"),
-      view<boolean>(account, "inspection"),
     ]);
-    const [freelancer, client, verifier, amountYocto, checklistHash, targetUrl, deadlineMs] = meta;
+    const [freelancer, client, verifier, amountYocto, checklistHash, targetUrl, deadlineMs, inspection] = meta;
     return {
       id,
       account,
@@ -43,9 +45,13 @@ async function resolveInvoice(id: string): Promise<Row> {
       evidenceHash: evidence?.[0] ?? "",
       verdict: evidence?.[1] ?? "",
       rulesSummary: evidence?.[2] ?? "",
-      checklist: checklistRaw ? JSON.parse(checklistRaw) : null,
     };
-  } catch {
+  } catch (e) {
+    // A busy node is not evidence that the account is gone. If the read failed
+    // for a transient reason, let the caller serve its last good snapshot
+    // instead of silently dropping a live invoice off the page.
+    if (e instanceof RpcError && e.retryable) throw e;
+
     /* account is gone — either settled or never created */
     const [receipt, summary] = await Promise.all([
       view<Row | null>(FACTORY, "get_receipt", { invoice_id: id }),
@@ -67,17 +73,74 @@ async function resolveInvoice(id: string): Promise<Row> {
   }
 }
 
+type Payload = {
+  factory: string;
+  rpc: string;
+  invoices: Row[];
+  readAtMs: number;
+  stale?: boolean;
+};
+
+/**
+ * Short-lived snapshot.
+ *
+ * The page polls, judges open it in several tabs, and free RPC endpoints count
+ * every one of those reads. Serving a 12-second-old snapshot from the same
+ * lambda keeps the chain as the source of truth without turning the demo into a
+ * rate-limit test.
+ */
+const TTL_MS = 12_000;
+let cache: { atMs: number; payload: Payload } | null = null;
+let refreshing: Promise<Payload> | null = null;
+
+async function readChain(): Promise<Payload> {
+  const ids = await view<string[]>(FACTORY, "list_invoices");
+  const rows = await Promise.all(ids.map((id) => resolveInvoice(id)));
+  return {
+    factory: FACTORY,
+    rpc: RPC,
+    invoices: rows.filter((r) => r.state !== "missing").reverse(),
+    readAtMs: Date.now(),
+  };
+}
+
 export async function GET() {
   await connection();
+
+  if (cache && Date.now() - cache.atMs < TTL_MS) {
+    return NextResponse.json(cache.payload);
+  }
+
   try {
-    const ids = await view<string[]>(FACTORY, "list_invoices");
-    const rows = await Promise.all(ids.map((id) => resolveInvoice(id)));
-    return NextResponse.json({
-      factory: FACTORY,
-      rpc: RPC,
-      invoices: rows.filter((r) => r.state !== "missing").reverse(),
+    refreshing ??= readChain().finally(() => {
+      refreshing = null;
     });
+    const payload = await refreshing;
+    cache = { atMs: Date.now(), payload };
+    return NextResponse.json(payload);
   } catch (e) {
-    return NextResponse.json({ error: String((e as Error).message ?? e) }, { status: 500 });
+    const message = String((e as Error).message ?? e);
+    const rateLimited = /429|rate limit/i.test(message);
+
+    // A stale snapshot beats an error screen: the numbers are seconds old and
+    // still true. The flag lets the page say so instead of pretending.
+    if (cache) {
+      return NextResponse.json({
+        ...cache.payload,
+        stale: true,
+        warning: rateLimited
+          ? "Chain reads are rate limited right now — showing the last confirmed snapshot."
+          : "Chain reads are failing — showing the last confirmed snapshot.",
+      });
+    }
+
+    return NextResponse.json(
+      {
+        error: rateLimited
+          ? "The public RPC is rate limiting reads. Retrying in a few seconds."
+          : `Could not read the factory: ${message}`,
+      },
+      { status: 503 },
+    );
   }
 }

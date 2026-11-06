@@ -37,6 +37,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [targetUrl, setTargetUrl] = useState("https://recallspend.vercel.app");
   const [amount, setAmount] = useState("1");
@@ -48,8 +49,11 @@ export default function Home() {
     try {
       const r = await fetch("/api/invoices", { cache: "no-store" });
       const data = await r.json();
+      // A stale snapshot is still true, just seconds old. Say that instead of
+      // painting the page red because a free RPC endpoint got busy.
       if (data.error) throw new Error(data.error);
       setInvoices(data.invoices ?? []);
+      setNotice(data.warning ?? null);
       setError(null);
     } catch (e) {
       setError(String((e as Error).message ?? e));
@@ -60,7 +64,7 @@ export default function Home() {
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 12000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -127,6 +131,12 @@ export default function Home() {
 
       {error && (
         <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>
+      )}
+
+      {notice && (
+        <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {notice}
+        </div>
       )}
 
       <section className="mt-10 grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 md:grid-cols-2">
