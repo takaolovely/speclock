@@ -1,0 +1,28 @@
+# rust
+contracts/*/target/
+**/*.rs.bk
+
+# node
+node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts
+web/.vercel/
+npm-debug.log*
+
+# env & secrets
+.env
+.env.*
+*.key
+*.pem
+!/.near-credentials.example
+
+# agent runtime
+agents/verifier/.verifier.lock
+agents/verifier/verifier.log
+agents/verifier/evidence/*/report.json.tmp
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
