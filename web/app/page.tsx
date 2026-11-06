@@ -118,11 +118,11 @@ export default function Home() {
           <h1 className="mt-3 max-w-2xl text-4xl font-semibold leading-tight text-zinc-50">
             Invoices that unlock on proof, not on mood.
           </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-400">
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-300">
             Freelancers wait on a client&apos;s approval button — and a client who ghosts keeps the money stuck. Here the
             money unlocks when an independent agent attests the checklist both sides agreed to.
           </p>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500">
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
             Each invoice is a keyless NEAR sub-account: an agent attests a deterministic checklist, splits the payout, and
             the account self-destructs to refund storage.
           </p>
@@ -139,8 +139,8 @@ export default function Home() {
         </div>
       )}
 
-      <section className="mt-10 grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 md:grid-cols-2">
-        <label className="text-xs text-zinc-400">
+      <section className="mt-10 grid gap-4 rounded-2xl border border-zinc-800 bg-[#141720] p-5 md:grid-cols-2">
+        <label className="text-xs text-zinc-300">
           Delivery URL (https)
           <input
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:border-emerald-500"
@@ -148,7 +148,7 @@ export default function Home() {
             onChange={(e) => setTargetUrl(e.target.value)}
           />
         </label>
-        <label className="text-xs text-zinc-400">
+        <label className="text-xs text-zinc-300">
           Invoice amount (NEAR)
           <input
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:border-emerald-500"
@@ -156,7 +156,7 @@ export default function Home() {
             onChange={(e) => setAmount(e.target.value)}
           />
         </label>
-        <label className="text-xs text-zinc-400">
+        <label className="text-xs text-zinc-300">
           DOM selector that must be visible
           <input
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:border-emerald-500"
@@ -164,7 +164,7 @@ export default function Home() {
             onChange={(e) => setSelector(e.target.value)}
           />
         </label>
-        <label className="text-xs text-zinc-400">
+        <label className="text-xs text-zinc-300">
           Text that must appear (optional)
           <input
             className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:border-emerald-500"
@@ -183,7 +183,7 @@ export default function Home() {
               className={`rounded-full border px-3 py-1 font-mono text-xs ${
                 splitBps === bps
                   ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
-                  : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                  : "border-zinc-600 text-zinc-300 hover:border-zinc-400"
               }`}
             >
               {bps / 100}%
@@ -211,7 +211,7 @@ export default function Home() {
             const rules = rulesOf(inv);
             const deadlinePassed = inv.deadlineMs ? Date.now() > inv.deadlineMs : false;
             return (
-              <li key={inv.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+              <li key={inv.id} className="rounded-2xl border border-zinc-800 bg-[#141720] p-5">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="font-mono text-sm text-zinc-200">{inv.id}</span>
                   <span

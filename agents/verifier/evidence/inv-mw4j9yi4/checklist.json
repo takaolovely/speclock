@@ -1,0 +1,1 @@
+{"version":1,"target_url":"https://speclock-nine.vercel.app/demo-target","rules":[{"type":"http_status","expected":200},{"type":"console_errors","max":0},{"type":"dom_selector","selector":"#checkout-button","state":"visible"},{"type":"response_time_ms","max":2000}]}

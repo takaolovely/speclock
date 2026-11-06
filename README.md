@@ -200,6 +200,25 @@ A transient failure is also explicitly *not* treated as evidence that an account
 
 ---
 
+## The demo target
+
+`/demo-target` is the delivery under inspection: a small checkout page for a fictional client. It exists so the verdict in the video is not a screenshot of a file somebody edited off camera.
+
+```
+/demo-target                         broken: no #checkout-button in the DOM
+/demo-target?state=fixed             fixed: the button is there
+/api/demo-target/toggle  POST        the staging switch ({"mode":"fixed"})
+```
+
+Two details that were not obvious until they broke the recording:
+
+- **A blob read is not the write.** The staging switch writes to shared storage, and the public read can answer with the previous value for a few seconds. The page therefore renders the mode the write just confirmed, and a sync badge polls the store until it agrees — because the verifier reads the plain URL, and an inspection that starts inside that window would judge the wrong version.
+- **`router.refresh()` was not enough.** The client router handed back a cached payload, so the "fix" looked like it did nothing. The switch does a hard navigation with a cache-buster instead.
+
+The switch is on the page because it is the freelancer's own preview: "what did I just deploy" is a fair question to ask of a staging URL, and the verifier genuinely does not know which state is live — it looks for the element the client asked for and reports what it found.
+
+---
+
 ## Reproduce it
 
 ```bash
