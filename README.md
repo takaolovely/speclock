@@ -275,7 +275,11 @@ Written down because a reviewer will find them anyway, and a repo that hides the
 contracts/invoice/    ephemeral invoice account: Funded → Settling → Settled/Refunded
 contracts/factory/    mint (keyless), record_receipt, list_invoices, summaries, migrate
 agents/verifier/      outbound-only Playwright agent: gate, inspect, canonical claim, attest
-web/                  Next.js dashboard: mint, request, refund, settled-without-account
+web/                  Next.js: / landing, /app dashboard, /demo-target the delivery under test
 evidence/             claim.json + report.json + screenshot for the attested demo run
 scripts/              e2e pass/fail/refund walkthroughs against testnet
 ```
+
+The landing page reads its counters from the factory at request time, so the
+numbers on `/` are the same ones the explorer shows. One click, one route: the
+dashboard lives at `/app` and every CTA on the landing page points there.

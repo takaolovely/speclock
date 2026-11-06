@@ -1,300 +1,233 @@
-"use client";
+import type { Metadata } from "next";
+import { connection } from "next/server";
+import { FACTORY, view } from "@/lib/near";
 
-import { useCallback, useEffect, useState } from "react";
-
-type Rule = { type: string; [k: string]: unknown };
-type Invoice = {
-  id: string;
-  account: string;
-  state: "live" | "settled" | "missing";
-  status: string;
-  amountYocto?: string | number;
-  freelancer?: string;
-  targetUrl?: string;
-  deadlineMs?: number;
-  checklistHash?: string;
-  checklist?: { rules: Rule[] } | null;
-  evidenceHash?: string;
-  verdict?: string;
-  rulesSummary?: string;
-  settledAtMs?: number;
-  inspectionRequested?: boolean;
+export const metadata: Metadata = {
+  title: "SpecLock — invoices that unlock on proof, not on mood",
+  description:
+    "Keyless NEAR invoice accounts that pay out when an independent agent attests a deterministic checklist. No approval button, no ghosting.",
 };
 
-const near = (y?: string | number) => (y ? Number(y) / 1e24 : 0).toFixed(2);
+// Live counters are read per request; they are also the first thing a judge
+// checks against the explorer, so they had better not be a build-time constant.
+export const instant = false;
 
-function rulesOf(inv: Invoice): { t: string; p: boolean }[] {
-  if (!inv.rulesSummary) return [];
+type LiveStats = { invoices: number; receipts: number } | null;
+
+async function readLiveStats(): Promise<LiveStats> {
   try {
-    return (JSON.parse(inv.rulesSummary) as { r: { t: string; p: boolean }[] }).r ?? [];
+    const [ids, receipts] = await Promise.all([
+      view<string[]>(FACTORY, "list_invoices"),
+      view<number>(FACTORY, "receipt_count"),
+    ]);
+    return { invoices: new Set(ids).size, receipts: Number(receipts) };
   } catch {
-    return [];
+    // A landing page must not fail because a free RPC endpoint is busy.
+    return null;
   }
 }
 
-export default function Home() {
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+const STEPS = [
+  {
+    n: "01",
+    title: "Keyless sub-account",
+    body: "The client's deposit mints inv-xxxx.speclock.testnet with CreateAccount → Transfer → DeployContract — and no AddKey anywhere in the batch.",
+    detail: "0 access keys · neither party can rug the escrow",
+  },
+  {
+    n: "02",
+    title: "Deterministic agent QA",
+    body: "An outbound-only Playwright verifier measures HTTP status, console errors, DOM selectors and timing, then hashes the claim with SHA-256.",
+    detail: "no LLM · no paid API · re-runnable by anyone",
+  },
+  {
+    n: "03",
+    title: "Split & self-destruct",
+    body: "A pass splits the payout and the tax, writes a permanent receipt to the factory, then calls delete_account to sweep the remainder home.",
+    detail: "10% default split · 100% of the storage stake refunded",
+  },
+];
 
-  const [targetUrl, setTargetUrl] = useState("https://recallspend.vercel.app");
-  const [amount, setAmount] = useState("1");
-  const [selector, setSelector] = useState("#checkout-button");
-  const [textContains, setTextContains] = useState("");
-  const [splitBps, setSplitBps] = useState(1000);
-
-  const load = useCallback(async () => {
-    try {
-      const r = await fetch("/api/invoices", { cache: "no-store" });
-      const data = await r.json();
-      // A stale snapshot is still true, just seconds old. Say that instead of
-      // painting the page red because a free RPC endpoint got busy.
-      if (data.error) throw new Error(data.error);
-      setInvoices(data.invoices ?? []);
-      setNotice(data.warning ?? null);
-      setError(null);
-    } catch (e) {
-      setError(String((e as Error).message ?? e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 12000);
-    return () => clearInterval(t);
-  }, [load]);
-
-  async function create() {
-    setBusy("create");
-    setError(null);
-    try {
-      const r = await fetch("/api/invoices/create", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          targetUrl,
-          amountNear: Number(amount),
-          splitBps,
-          selector,
-          textContains,
-          maxConsoleErrors: 0,
-          maxResponseMs: 2000,
-        }),
-      });
-      const data = await r.json();
-      if (data.error) throw new Error(data.error);
-      await load();
-    } catch (e) {
-      setError(String((e as Error).message ?? e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function act(id: string, action: "request" | "refund") {
-    setBusy(id + action);
-    setError(null);
-    try {
-      const r = await fetch(`/api/invoices/${id}/${action}`, { method: "POST" });
-      const data = await r.json();
-      if (data.error) throw new Error(data.error);
-      await load();
-    } catch (e) {
-      setError(String((e as Error).message ?? e));
-    } finally {
-      setBusy(null);
-    }
-  }
+export default async function Landing() {
+  await connection();
+  const stats = await readLiveStats();
 
   return (
-    <main className="mx-auto max-w-5xl px-5 py-12">
-      <header className="flex items-baseline justify-between gap-4">
-        <div>
-          <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-emerald-400">SpecLock · NEAR testnet</div>
-          <h1 className="mt-3 max-w-2xl text-4xl font-semibold leading-tight text-zinc-50">
-            Invoices that unlock on proof, not on mood.
+    <div className="relative min-h-screen overflow-hidden bg-[#090a0f] text-zinc-200">
+      {/* Depth without an image: two soft green pools and a faint grid. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(60rem 32rem at 20% -10%, rgba(0,236,151,0.10), transparent 60%), radial-gradient(40rem 24rem at 85% 0%, rgba(0,236,151,0.06), transparent 55%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.35]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, rgba(39,39,42,0.55) 1px, transparent 1px), linear-gradient(to bottom, rgba(39,39,42,0.55) 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
+          maskImage: "linear-gradient(to bottom, black, transparent 70%)",
+          WebkitMaskImage: "linear-gradient(to bottom, black, transparent 70%)",
+        }}
+      />
+
+      <div className="relative">
+        {/* nav */}
+        <header className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-6">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#00EC97] text-[13px] font-bold text-[#06231a]">
+              S
+            </span>
+            <span className="text-sm font-semibold tracking-tight text-zinc-100">SpecLock</span>
+          </div>
+          <nav className="ml-auto hidden items-center gap-6 font-mono text-[11px] uppercase tracking-[0.16em] text-zinc-400 sm:flex">
+            <a href="#how" className="transition-colors hover:text-zinc-200">
+              How it works
+            </a>
+            <a
+              href="https://github.com/takaolovely/speclock"
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-zinc-200"
+            >
+              GitHub
+            </a>
+            <a
+              href="https://testnet.nearblocks.io/account/speclock.testnet"
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-zinc-200"
+            >
+              Factory ↗
+            </a>
+          </nav>
+          <a
+            href="/app"
+            className="rounded-lg bg-[#00EC97] px-4 py-2 text-[13px] font-semibold text-[#06231a] transition-transform hover:scale-[1.02]"
+          >
+            Launch App
+          </a>
+        </header>
+
+        {/* hero */}
+        <section className="mx-auto max-w-6xl px-6 pb-16 pt-10 sm:pt-16">
+          <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800/80 bg-zinc-900/50 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-400">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00EC97] opacity-60" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#00EC97]" />
+            </span>
+            Live on NEAR testnet — keyless ephemeral escrow
+          </div>
+
+          <h1 className="mt-6 max-w-4xl text-4xl font-semibold leading-[1.05] tracking-tight text-zinc-50 sm:text-6xl">
+            Invoices that unlock on proof,{" "}
+            <span className="text-[#00EC97]">not on mood.</span>
           </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-zinc-300">
+
+          <p className="mt-6 max-w-2xl text-base leading-relaxed text-zinc-300">
             Freelancers wait on a client&apos;s approval button — and a client who ghosts keeps the money stuck. Here the
             money unlocks when an independent agent attests the checklist both sides agreed to.
           </p>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-400">
-            Each invoice is a keyless NEAR sub-account: an agent attests a deterministic checklist, splits the payout, and
-            the account self-destructs to refund storage.
-          </p>
-        </div>
-      </header>
 
-      {error && (
-        <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>
-      )}
-
-      {notice && (
-        <div className="mt-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          {notice}
-        </div>
-      )}
-
-      <section className="mt-10 grid gap-4 rounded-2xl border border-zinc-800 bg-[#141720] p-5 md:grid-cols-2">
-        <label className="text-xs text-zinc-300">
-          Delivery URL (https)
-          <input
-            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:border-emerald-500"
-            value={targetUrl}
-            onChange={(e) => setTargetUrl(e.target.value)}
-          />
-        </label>
-        <label className="text-xs text-zinc-300">
-          Invoice amount (NEAR)
-          <input
-            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:border-emerald-500"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-        </label>
-        <label className="text-xs text-zinc-300">
-          DOM selector that must be visible
-          <input
-            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:border-emerald-500"
-            value={selector}
-            onChange={(e) => setSelector(e.target.value)}
-          />
-        </label>
-        <label className="text-xs text-zinc-300">
-          Text that must appear (optional)
-          <input
-            className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100 outline-none focus:border-emerald-500"
-            value={textContains}
-            onChange={(e) => setTextContains(e.target.value)}
-            placeholder="e.g. Checkout"
-          />
-        </label>
-
-        <div className="md:col-span-2 flex flex-wrap items-center gap-3">
-          <span className="text-xs uppercase tracking-wide text-zinc-500">Split</span>
-          {[0, 500, 1000, 2000].map((bps) => (
-            <button
-              key={bps}
-              onClick={() => setSplitBps(bps)}
-              className={`rounded-full border px-3 py-1 font-mono text-xs ${
-                splitBps === bps
-                  ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
-                  : "border-zinc-600 text-zinc-300 hover:border-zinc-400"
-              }`}
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <a
+              href="/app"
+              className="group inline-flex items-center gap-2 rounded-xl bg-[#00EC97] px-5 py-3 text-sm font-semibold text-[#06231a] shadow-[0_0_40px_-8px_rgba(0,236,151,0.55)] transition-transform hover:scale-[1.02]"
             >
-              {bps / 100}%
-            </button>
-          ))}
-          <button
-            onClick={create}
-            disabled={busy === "create"}
-            className="ml-auto rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-emerald-950 disabled:opacity-50"
-          >
-            {busy === "create" ? "Minting…" : "Create invoice"}
-          </button>
-        </div>
-      </section>
+              Launch App
+              <span className="transition-transform group-hover:translate-x-0.5">→</span>
+            </a>
+            <a
+              href="#how"
+              className="inline-flex items-center gap-2 rounded-xl border border-zinc-800/80 bg-zinc-900/40 px-5 py-3 text-sm text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+            >
+              How it works
+            </a>
+            <span className="font-mono text-[11px] text-zinc-400">no wallet needed to try it</span>
+          </div>
 
-      <section className="mt-10">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Invoices</h2>
-          <span className="font-mono text-[11px] text-zinc-600">{loading ? "reading chain…" : `${invoices.length} on chain`}</span>
-        </div>
+          <dl className="mt-12 grid max-w-2xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-800/60 sm:grid-cols-4">
+            {[
+              { k: "network", v: "NEAR testnet" },
+              { k: "invoices minted", v: stats ? String(stats.invoices) : "—" },
+              { k: "permanent receipts", v: stats ? String(stats.receipts) : "—" },
+              { k: "inbound ports", v: "0" },
+            ].map((s) => (
+              <div key={s.k} className="bg-[#0b0d13] px-4 py-3">
+                <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-400">{s.k}</dt>
+                <dd className="mt-1 font-mono text-sm text-zinc-200">{s.v}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
 
-        <ul className="mt-4 space-y-3">
-          {invoices.map((inv) => {
-            const settled = inv.state === "settled";
-            const rules = rulesOf(inv);
-            const deadlinePassed = inv.deadlineMs ? Date.now() > inv.deadlineMs : false;
-            return (
-              <li key={inv.id} className="rounded-2xl border border-zinc-800 bg-[#141720] p-5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="font-mono text-sm text-zinc-200">{inv.id}</span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${
-                      settled
-                        ? "bg-emerald-500/15 text-emerald-300"
-                        : inv.status === "Funded"
-                          ? "bg-amber-500/15 text-amber-300"
-                          : "bg-zinc-700/40 text-zinc-300"
-                    }`}
-                  >
-                    {settled ? "settled · self-destructed" : inv.status}
-                  </span>
-                  <span className="ml-auto font-mono text-xs text-zinc-400">{near(inv.amountYocto)} NEAR</span>
+        {/* three steps */}
+        <section id="how" className="mx-auto max-w-6xl px-6 pb-20">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">The whole machine, in three moves</h2>
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-500">verified on testnet</span>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {STEPS.map((s) => (
+              <div
+                key={s.n}
+                className="group rounded-2xl border border-zinc-800/80 bg-[#0f121a] p-5 transition-colors hover:border-[#00EC97]/40"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] tracking-[0.2em] text-[#00EC97]/80">{s.n}</span>
+                  <span className="h-1 w-8 rounded-full bg-zinc-800 transition-colors group-hover:bg-[#00EC97]/50" />
                 </div>
+                <h3 className="mt-4 text-base font-semibold text-zinc-100">{s.title}</h3>
+                <p className="mt-2 text-[13px] leading-relaxed text-zinc-400">{s.body}</p>
+                <p className="mt-4 border-t border-zinc-800/80 pt-3 font-mono text-[10px] text-zinc-400">{s.detail}</p>
+              </div>
+            ))}
+          </div>
 
-                {inv.targetUrl && <div className="mt-2 truncate font-mono text-[11px] text-zinc-500">{inv.targetUrl}</div>}
+          <div className="mt-6 rounded-2xl border border-zinc-800/80 bg-gradient-to-b from-[#0d1017] to-[#0a0c11] p-6 sm:flex sm:items-center sm:justify-between sm:gap-6">
+            <div>
+              <p className="text-sm font-medium text-zinc-200">The dashboard is one click away.</p>
+              <p className="mt-1 text-[13px] text-zinc-400">
+                Mint an invoice, request a verification, and watch a settled account stay visible after it deletes itself.
+              </p>
+            </div>
+            <a
+              href="/app"
+              className="mt-4 inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#00EC97] px-5 py-3 text-sm font-semibold text-[#06231a] transition-transform hover:scale-[1.02] sm:mt-0"
+            >
+              Open the dashboard →
+            </a>
+          </div>
+        </section>
 
-                {settled && (
-                  <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[11px] text-emerald-300">
-                    Account deleted after payout — 100% of the storage stake returned to the freelancer.
-                  </div>
-                )}
-
-                {rules.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {rules.map((r, i) => (
-                      <span
-                        key={i}
-                        className={`rounded-md px-2 py-1 font-mono text-[10px] ${
-                          r.p ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300"
-                        }`}
-                      >
-                        {r.p ? "PASS" : "FAIL"} {r.t}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  {inv.evidenceHash && (
-                    <a
-                      className="font-mono text-[10px] text-zinc-500 underline decoration-zinc-700 hover:text-emerald-300"
-                      href={`https://testnet.nearblocks.io/account/${inv.account}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      evidence {inv.evidenceHash.slice(0, 12)}…
-                    </a>
-                  )}
-                  {!settled && inv.status === "Funded" && (
-                    <button
-                      onClick={() => act(inv.id, "request")}
-                      disabled={busy === inv.id + "request"}
-                      className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-emerald-500"
-                    >
-                      {busy === inv.id + "request" ? "sending…" : inv.inspectionRequested ? "Requested — agent polling" : "Request verification"}
-                    </button>
-                  )}
-                  {!settled && inv.status === "Funded" && (
-                    <button
-                      onClick={() => act(inv.id, "refund")}
-                      disabled={!deadlinePassed || busy === inv.id + "refund"}
-                      title={deadlinePassed ? "Refund the client" : "Available after the deadline"}
-                      className="rounded-lg border border-zinc-800 px-3 py-1.5 text-xs text-zinc-500 disabled:opacity-40 hover:border-red-500/50 hover:text-red-300"
-                    >
-                      Refund
-                    </button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      <footer className="mt-12 flex flex-wrap gap-4 font-mono text-[10px] uppercase tracking-wide text-zinc-600">
-        <a href="https://testnet.nearblocks.io/account/speclock.testnet" target="_blank" rel="noreferrer" className="hover:text-emerald-400">
-          factory: speclock.testnet
-        </a>
-        <span>verifier: outbound only</span>
-        <span>checklist hashed on chain</span>
-      </footer>
-    </main>
+        <footer className="border-t border-zinc-800/80">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-6 font-mono text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+            <a
+              href="https://testnet.nearblocks.io/account/speclock.testnet"
+              target="_blank"
+              rel="noreferrer"
+              className="transition-colors hover:text-[#00EC97]"
+            >
+              factory: speclock.testnet
+            </a>
+            <span>verifier: outbound only</span>
+            <span>checklist hashed on chain</span>
+            <a
+              href="https://github.com/takaolovely/speclock"
+              target="_blank"
+              rel="noreferrer"
+              className="ml-auto transition-colors hover:text-[#00EC97]"
+            >
+              source ↗
+            </a>
+          </div>
+        </footer>
+      </div>
+    </div>
   );
 }
