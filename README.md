@@ -69,7 +69,7 @@ run 2   e3c7dae91cbe319c…559c8f7f0484928   duration_ms 2074   fail (dom_select
 Same claim, different clock. The contract holds the pass hash, written at attest time:
 
 ```
-inv-0062.speclock.testnet evidence() →  1fadbb01adb687cb…d7e8e6bae7a814 | pass
+speclock.testnet.get_receipt("inv-0062") → 1fadbb01adb687cb…d7e8e6bae7a814 | pass
 speclock.testnet.get_summary("inv-0062")
   → {"r":[{"t":"http_status","p":true},{"t":"console_errors","p":true},
           {"t":"dom_selector","p":true},{"t":"response_time_ms","p":true}]}
@@ -127,7 +127,7 @@ Beyond the gate, the worker holds no listening socket at all. It polls the facto
 
 `contracts/invoice` — one ephemeral invoice account, deployed by the factory into `inv-xxxx.speclock.testnet`.
 
-- **Keyless by construction.** The mint is `CreateAccount → Transfer → DeployContract → FunctionCall(new)`. There is no `AddKey` action anywhere, so no human — freelancer or client — can move the escrow. Only the deployed code can, and only on an attested pass. Check it: `near view inv-0044.speclock.testnet` shows `0 access keys` on the mint receipt.
+- **Keyless by construction.** The mint is `CreateAccount → Transfer → DeployContract → FunctionCall(new)`. There is no `AddKey` action anywhere, so no human — freelancer or client — can move the escrow. Only the deployed code can, and only on an attested pass. Check it on the mint transaction of `inv-0062`: four actions, no `AddKey`, and the account never had a key to begin with.
 - **Split from the invoice, not the balance.** `split = invoice_amount * split_bps / 10_000`. Using `env::account_balance()` would tax the 2.1 NEAR storage stake too.
 - **No half-paid invoices.** `attest(pass)` flips `Funded → Settling` *before* any promise leaves, so a second attestation landing mid-flight is rejected. The callback `on_settle` reads both `PromiseResult`s and, if the split **or** the receipt failed, returns the invoice to `Funded` instead of deleting it. A deleted invoice cannot be retried; a `Funded` one can.
 - **Refund is a real path, not a fallback.** After `deadline_ms`, the client can `refund()` and the account deletes itself, sweeping everything back. Tested on `inv-0045`: client `2.4 → 2.3907` (the 0.0093 NEAR difference is gas).
