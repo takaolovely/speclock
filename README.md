@@ -18,7 +18,7 @@ Each invoice is a **keyless NEAR sub-account**: an agent attests a deterministic
 
 ## The flow, in five steps
 
-![SpecLock architecture](docs/architecture.png)
+<img src="docs/architecture.png" width="900" alt="SpecLock: client deposits, factory mints a keyless invoice account, the agent inspects, the contract attests and splits, the account deletes itself">
 
 A `fail` verdict moves nothing. The invoice stays `Funded`, the money stays locked, and the freelancer can fix the delivery and ask for another check. After `deadline_ms` the client can `refund()` instead and the account deletes itself, sweeping everything back.
 
