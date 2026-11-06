@@ -358,7 +358,7 @@ export default async function Landing() {
                 <li>No listening socket: the worker polls the factory every 12 seconds and opens one browser when there is work.</li>
                 <li>Only hosts on the allowlist, https only, standard port only, no credentials in the URL.</li>
                 <li>
-                  Try it: <span className="font-mono text-[11px] text-zinc-300">node -e &apos;require(&quot;./lib/security&quot;).vetUrl(&quot;https://169.254.169.254/&quot;).then(console.log)&apos;</span>
+                  Try it: <span className="break-all font-mono text-[10.5px] text-zinc-300">node -e &apos;require(&quot;./lib/security&quot;).vetUrl(&quot;https://169.254.169.254/&quot;).then(console.log)&apos;</span>
                 </li>
               </ul>
             </div>
